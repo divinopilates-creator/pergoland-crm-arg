@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { contacts, activities, crmSettings } from "@/db/schema";
+import { contacts, activities, crmSettings, deals, pipelineStages } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 // Field name mapping: common variations → standard field
@@ -101,6 +101,20 @@ export async function POST(request: NextRequest) {
   }
 
   const fields = extractFields(payload);
+// Evitar duplicados por telefono
+  if (fields.phone) {
+    const existing = db
+      .select()
+      .from(contacts)
+      .where(eq(contacts.phone, fields.phone))
+      .get();
+    if (existing) {
+      return NextResponse.json(
+        { success: true, message: "Contacto ya existe" },
+        { status: 200 }
+      );
+    }
+  }
 
   if (!fields.name) {
     return NextResponse.json(
@@ -132,11 +146,33 @@ export async function POST(request: NextRequest) {
       .returning()
       .get();
 
-    // Log activity for the new lead
+    // Crear deal en primera etapa del pipeline
+    const firstStage = db
+      .select()
+      .from(pipelineStages)
+      .orderBy(pipelineStages.order)
+      .limit(1)
+      .get();
+
+    if (firstStage) {
+      db.insert(deals)
+        .values({
+          title: `Pérgola - ${fields.name}`,
+          value: 0,
+          stageId: firstStage.id,
+          contactId: contact.id,
+          notes: fields.notes || null,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .run();
+    }
+
+    // Log activity
     db.insert(activities)
       .values({
         type: "note",
-        description: `Lead recibido via webhook${fields.company ? ` (${fields.company})` : ""}`,
+        description: `Lead recibido via WhatsApp - Matías`,
         contactId: contact.id,
         createdAt: now,
       })
