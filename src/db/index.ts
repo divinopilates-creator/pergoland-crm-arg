@@ -111,9 +111,14 @@ function runMigrations(db: Database.Database): void {
     const maxOrder = (db.prepare("SELECT MAX(\"order\") as mo FROM pipeline_stages").get() as { mo: number | null }).mo || 4;
 
     const missingStages = [
-      { name: "Cotización Enviada", color: "#0891b2", order: maxOrder + 1 },
-      { name: "Visita Programada", color: "#d97706", order: maxOrder + 2 },
-    ].filter((s) => !stageNames.includes(s.name));
+  { name: "Nuevo Lead", color: "#64748b", order: 1 },
+  { name: "Pendiente de Calificacion", color: "#2563eb", order: 2 },
+  { name: "Cotizacion Enviada", color: "#8b5cf6", order: 3 },
+  { name: "Visita Programada", color: "#ea580c", order: 4 },
+  { name: "Negociacion", color: "#f59e0b", order: 5 },
+  { name: "Ganado", color: "#16a34a", order: 6 },
+  { name: "Perdido", color: "#dc2626", order: 7 },
+].filter((s) => !stageNames.includes(s.name));
 
     const insertStage = db.prepare(`INSERT INTO pipeline_stages (id, name, "order", color, is_won, is_lost) VALUES (?, ?, ?, ?, 0, 0)`);
     for (const s of missingStages) {
