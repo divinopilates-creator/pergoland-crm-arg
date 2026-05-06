@@ -151,13 +151,14 @@ function seedDefaultStages(db: Database.Database): void {
     if (!result || result.count > 0) return;
 
     const defaultStages = [
-      { name: "Prospecto", order: 1, color: "#64748b", isWon: 0, isLost: 0 },
-      { name: "Contactado", order: 2, color: "#2563eb", isWon: 0, isLost: 0 },
-      { name: "Propuesta", order: 3, color: "#8b5cf6", isWon: 0, isLost: 0 },
-      { name: "Negociacion", order: 4, color: "#ea580c", isWon: 0, isLost: 0 },
-      { name: "Cerrado Ganado", order: 5, color: "#16a34a", isWon: 1, isLost: 0 },
-      { name: "Cerrado Perdido", order: 6, color: "#dc2626", isWon: 0, isLost: 1 },
-    ];
+  { name: "Nuevo Lead", order: 1, color: "#64748b", isWon: 0, isLost: 0 },
+  { name: "Pendiente de Calificacion", order: 2, color: "#2563eb", isWon: 0, isLost: 0 },
+  { name: "Cotizacion Enviada", order: 3, color: "#8b5cf6", isWon: 0, isLost: 0 },
+  { name: "Visita Programada", order: 4, color: "#ea580c", isWon: 0, isLost: 0 },
+  { name: "Negociacion", order: 5, color: "#f59e0b", isWon: 0, isLost: 0 },
+  { name: "Ganado", order: 6, color: "#16a34a", isWon: 1, isLost: 0 },
+  { name: "Perdido", order: 7, color: "#dc2626", isWon: 0, isLost: 1 },
+];
 
     const insert = db.prepare(
       `INSERT OR IGNORE INTO pipeline_stages (id, name, "order", color, is_won, is_lost) VALUES (?, ?, ?, ?, ?, ?)`
