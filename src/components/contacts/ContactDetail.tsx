@@ -176,3 +176,217 @@ export function ContactDetailClient({
           <Button variant="outline" size="sm" onClick={() => setShowEditForm(true)} className="cursor-pointer">
             <Pencil className="h-4 w-4 mr-1" />
             Editar
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleDelete} className="cursor-pointer text-destructive hover:text-destructive">
+            <Trash2 className="h-4 w-4 mr-1" />
+            Eliminar
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Contact info */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Informacion</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Contacto</p>
+            {contact.email && (
+              <div className="flex items-center gap-2 text-sm">
+                <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                <a href={`mailto:${contact.email}`} className="text-primary hover:underline flex-1 truncate">
+                  {contact.email}
+                </a>
+                <button onClick={() => handleCopy(contact.email!, "email")} className="p-1 rounded hover:bg-muted cursor-pointer">
+                  {copiedField === "email" ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
+                </button>
+              </div>
+            )}
+            {contact.phone && (
+              <div className="flex items-center gap-2 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                <span className="flex-1">{contact.phone}</span>
+                <div className="flex items-center gap-1">
+                  <a href={`https://wa.me/${cleanPhoneForWhatsApp(contact.phone)}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-green-50 cursor-pointer" title="Abrir WhatsApp">
+                    <MessageCircle className="h-3.5 w-3.5 text-green-600" />
+                  </a>
+                  <a href={`tel:${contact.phone}`} className="p-1 rounded hover:bg-blue-50 cursor-pointer" title="Llamar">
+                    <Phone className="h-3.5 w-3.5 text-blue-600" />
+                  </a>
+                  <button onClick={() => handleCopy(contact.phone!, "phone")} className="p-1 rounded hover:bg-muted cursor-pointer">
+                    {copiedField === "phone" ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </button>
+                </div>
+              </div>
+            )}
+            {contact.comuna && (
+              <div className="flex items-center gap-2 text-sm">
+                <span>📍</span>
+                <span>{contact.comuna}</span>
+              </div>
+            )}
+            {contact.direccion && (
+              <div className="flex items-center gap-2 text-sm">
+                <span>🏠</span>
+                <span>{contact.direccion}</span>
+              </div>
+            )}
+            {contact.company && (
+              <div className="flex items-center gap-2 text-sm">
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+                <span>{contact.company}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2 text-sm">
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <span>Creado {formatDate(contact.createdAt)}</span>
+            </div>
+
+            {(contact.medidas || contact.modelo || contact.tipo_cielo || contact.presupuesto_estimado || contact.fecha_visita) && (
+              <div className="pt-2 border-t space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Proyecto</p>
+                {contact.medidas && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span>📐</span>
+                    <span className="text-muted-foreground">Medidas:</span>
+                    <span className="font-medium">{contact.medidas}</span>
+                  </div>
+                )}
+                {contact.modelo && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span>🏗️</span>
+                    <span className="text-muted-foreground">Modelo:</span>
+                    <span className="font-medium">{contact.modelo}</span>
+                  </div>
+                )}
+                {contact.tipo_cielo && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span>🪵</span>
+                    <span className="text-muted-foreground">Cielo:</span>
+                    <span className="font-medium">{contact.tipo_cielo.replace(/_/g, " ")}</span>
+                  </div>
+                )}
+                {contact.presupuesto_estimado && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span>💰</span>
+                    <span className="text-muted-foreground">Presupuesto:</span>
+                    <span className="font-medium text-primary">
+                      {new Intl.NumberFormat("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 }).format(contact.presupuesto_estimado)}
+                    </span>
+                  </div>
+                )}
+                {contact.fecha_visita && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span>📅</span>
+                    <span className="text-muted-foreground">Visita:</span>
+                    <span className="font-medium text-orange-600">
+                      {new Date(contact.fecha_visita).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {contact.notes && (
+              <div className="pt-2 border-t">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Notas</p>
+                <p className="text-sm text-muted-foreground">{contact.notes}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Deals */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Deals ({deals.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {deals.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sin deals</p>
+            ) : (
+              <div className="space-y-3">
+                {deals.map((deal) => (
+                  <div key={deal.id} className="p-3 rounded-lg border cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/deals/${deal.id}`)}>
+                    <p className="text-sm font-medium">{deal.title}</p>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-sm font-semibold text-primary">{formatCurrency(deal.value)}</span>
+                      <Badge variant="outline" style={{ borderColor: deal.stageColor || undefined, color: deal.stageColor || undefined }}>
+                        {deal.stageName}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Actividades + Conversación WhatsApp */}
+        <Card className="lg:col-span-1">
+          <CardHeader className="pb-0">
+            <div className="flex items-center justify-between">
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setActiveTab("actividades")}
+                  className={`px-3 py-1.5 text-sm rounded-md cursor-pointer transition-colors ${activeTab === "actividades" ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Actividades ({activities.length})
+                </button>
+                {contact.phone && (
+                  <button
+                    onClick={() => setActiveTab("conversacion")}
+                    className={`px-3 py-1.5 text-sm rounded-md cursor-pointer transition-colors ${activeTab === "conversacion" ? "bg-muted font-medium" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    💬 WhatsApp
+                  </button>
+                )}
+              </div>
+              {activeTab === "actividades" && (
+                <Button variant="ghost" size="sm" onClick={() => setShowActivityForm(true)} className="cursor-pointer">
+                  <Plus className="h-4 w-4 mr-1" />
+                  Registrar
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent className="pt-3">
+            {activeTab === "actividades" ? (
+              activities.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Sin actividades. Registra una llamada, email o nota.</p>
+              ) : (
+                <div className="space-y-4">
+                  {activities.map((activity) => {
+                    const Icon = activityIcons[activity.type] || FileText;
+                    const config = ACTIVITY_TYPE_CONFIG[activity.type as ActivityType];
+                    const isPending = !activity.completedAt && activity.scheduledAt;
+                    return (
+                      <div key={activity.id} className="flex gap-3">
+                        <div className="rounded-full bg-muted p-2 h-fit shrink-0">
+                          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-xs">
+                              {config?.label || activity.type}
+                            </Badge>
+                            {isPending && (
+                              <Badge variant="outline" className="text-xs text-orange-600 border-orange-600 cursor-pointer" onClick={() => handleCompleteActivity(activity.id)}>
+                                Completar
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm mt-1">{activity.description}</p>
+                          {activity.attachmentPath && (
+                            <div className="flex items-center gap-2 mt-1.5">
+                              <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
+                              <span className="text-xs text-muted-foreground truncate">{activity.attachmentPath.split("/").pop()}</span>
+                              {contact.email && (
+                                <button onClick={() => handleSendEmail(activity.id)} disabled={sendingEmail === activity.id} className="flex items-center gap-1 text-xs text-primary hover:underline disabled:opacity-50 cursor-pointer">
+                                  <Send className="h-3 w-3" />
+                                  {sendingEmail === activity.id ? "Enviando..." : "Enviar por email"}
+                                </button>
+                              )}
+                            </div>
+                          )}
