@@ -1,32 +1,24 @@
 FROM node:22-slim
-
 WORKDIR /app
 
-# Install build dependencies for better-sqlite3
-RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
-
-# Copy package files
+# Copiar package files
 COPY package.json package-lock.json* ./
 
-# Install dependencies
+# Instalar dependencias
 RUN npm ci
 
-# Copy source code
+# Copiar source code
 COPY . .
 
-# Build the application
+# Inyectar DATABASE_URL en build time para que Next.js pueda conectar
+ARG DATABASE_URL
+ENV DATABASE_URL=$DATABASE_URL
+
+# Build
 RUN npm run build
-
-# Create data directory
-RUN mkdir -p data
-
-# Initialize database
-RUN npx tsx scripts/init.ts
 
 # Expose port
 EXPOSE 3000
-
 ENV NODE_ENV=production
 ENV HOSTNAME="0.0.0.0"
-
 CMD ["npm", "start"]
