@@ -16,9 +16,7 @@ function escapeCSV(value: string | null | undefined): string {
 }
 
 function buildCSV(headers: string[], rows: string[][]): string {
-  const headerLine = headers.map(escapeCSV).join(",");
-  const dataLines = rows.map((row) => row.map(escapeCSV).join(","));
-  return [headerLine, ...dataLines].join("\n");
+  return [headers.map(escapeCSV).join(","), ...rows.map((r) => r.map(escapeCSV).join(","))].join("\n");
 }
 
 export async function GET(request: NextRequest) {
@@ -27,43 +25,15 @@ export async function GET(request: NextRequest) {
   const today = new Date().toISOString().split("T")[0];
 
   if (type === "contacts") {
-    const allContacts = db
-      .select()
-      .from(contacts)
-      .orderBy(desc(contacts.createdAt))
-      .all();
-
-    const headers = [
-      "Nombre",
-      "Email",
-      "Telefono",
-      "Empresa",
-      "Fuente",
-      "Temperatura",
-      "Score",
-      "Notas",
-      "Fecha de creacion",
-    ];
-
+    const allContacts = await db.select().from(contacts).orderBy(desc(contacts.createdAt));
+    const headers = ["Nombre", "Email", "Telefono", "Empresa", "Fuente", "Temperatura", "Score", "Notas", "Fecha de creacion"];
     const rows = allContacts.map((c) => [
-      c.name,
-      c.email || "",
-      c.phone || "",
-      c.company || "",
+      c.name, c.email || "", c.phone || "", c.company || "",
       SOURCE_LABELS[c.source as LeadSource] || c.source,
-      c.temperature === "hot"
-        ? "Caliente"
-        : c.temperature === "warm"
-          ? "Tibio"
-          : "Frio",
-      String(c.score),
-      c.notes || "",
-      formatDate(c.createdAt),
+      c.temperature === "hot" ? "Caliente" : c.temperature === "warm" ? "Tibio" : "Frio",
+      String(c.score), c.notes || "", formatDate(c.createdAt),
     ]);
-
-    const csv = buildCSV(headers, rows);
-
-    return new Response("\ufeff" + csv, {
+    return new Response("\ufeff" + buildCSV(headers, rows), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="contactos-${today}.csv"`,
@@ -72,48 +42,22 @@ export async function GET(request: NextRequest) {
   }
 
   if (type === "deals") {
-    const allDeals = db
-      .select({
-        title: deals.title,
-        value: deals.value,
-        probability: deals.probability,
-        notes: deals.notes,
-        expectedClose: deals.expectedClose,
-        createdAt: deals.createdAt,
-        contactName: contacts.name,
-        stageName: pipelineStages.name,
-      })
-      .from(deals)
-      .leftJoin(contacts, eq(deals.contactId, contacts.id))
-      .leftJoin(pipelineStages, eq(deals.stageId, pipelineStages.id))
-      .orderBy(asc(pipelineStages.order))
-      .all();
+    const allDeals = await db.select({
+      title: deals.title, value: deals.value, probability: deals.probability,
+      notes: deals.notes, expectedClose: deals.expectedClose, createdAt: deals.createdAt,
+      contactName: contacts.name, stageName: pipelineStages.name,
+    })
+    .from(deals)
+    .leftJoin(contacts, eq(deals.contactId, contacts.id))
+    .leftJoin(pipelineStages, eq(deals.stageId, pipelineStages.id))
+    .orderBy(asc(pipelineStages.order));
 
-    const headers = [
-      "Titulo",
-      "Valor",
-      "Contacto",
-      "Etapa",
-      "Probabilidad",
-      "Cierre Estimado",
-      "Notas",
-      "Fecha de creacion",
-    ];
-
+    const headers = ["Titulo", "Valor", "Contacto", "Etapa", "Probabilidad", "Cierre Estimado", "Notas", "Fecha de creacion"];
     const rows = allDeals.map((d) => [
-      d.title,
-      formatCurrency(d.value),
-      d.contactName || "",
-      d.stageName || "",
-      `${d.probability}%`,
-      formatDate(d.expectedClose),
-      d.notes || "",
-      formatDate(d.createdAt),
+      d.title, formatCurrency(d.value), d.contactName || "", d.stageName || "",
+      `${d.probability}%`, formatDate(d.expectedClose), d.notes || "", formatDate(d.createdAt),
     ]);
-
-    const csv = buildCSV(headers, rows);
-
-    return new Response("\ufeff" + csv, {
+    return new Response("\ufeff" + buildCSV(headers, rows), {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="deals-${today}.csv"`,
@@ -121,7 +65,5 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  return new Response("Tipo invalido. Use ?type=contacts o ?type=deals", {
-    status: 400,
-  });
+  return new Response("Tipo invalido. Use ?type=contacts o ?type=deals", { status: 400 });
 }

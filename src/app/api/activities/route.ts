@@ -1,17 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { activities, contacts, deals } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { activities, contacts, deals, pipelineStages } from "@/db/schema";
+import { eq, desc, asc, isNull } from "drizzle-orm";
 import { calculateLeadScore, suggestTemperature } from "@/lib/scoring";
 import { classifyLead, isAIEnabled } from "@/lib/claude";
-import { pipelineStages } from "@/db/schema";
-import { asc } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
 
 const STAGE_RULES: Record<string, { stageName: string; temperature: "cold" | "warm" | "hot" }> = {
-  cotizacion: { stageName: "Cotización Enviada", temperature: "warm" },
+  cotizacion: { stageName: "Cotizacion Enviada", temperature: "warm" },
   visita:     { stageName: "Visita Programada",  temperature: "hot"  },
 };
 
@@ -39,12 +37,11 @@ export async function GET(request: NextRequest) {
   if (contactId) {
     query = query.where(eq(activities.contactId, contactId)) as typeof query;
   }
-
   if (dealId) {
     query = query.where(eq(activities.dealId, dealId)) as typeof query;
   }
 
-  const results = query.orderBy(desc(activities.createdAt)).all();
+  const results = await query.orderBy(desc(activities.createdAt));
   return NextResponse.json(results);
 }
 
@@ -58,59 +55,46 @@ export async function POST(request: NextRequest) {
   const { type, description, contactId, dealId, scheduledAt, attachmentPath, dealValue } = body;
 
   if (!type || !description || !contactId) {
-    return NextResponse.json(
-      { error: "Tipo, descripcion y contacto son requeridos" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Tipo, descripcion y contacto son requeridos" }, { status: 400 });
   }
 
   try {
-    const result = db
-      .insert(activities)
-      .values({
-        type,
-        description,
-        contactId,
-        dealId: dealId || null,
-        scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-        completedAt: null,
-        createdAt: new Date(),
-        attachmentPath: attachmentPath || null,
-      })
-      .returning()
-      .get();
+    const rows = await db.insert(activities).values({
+      type,
+      description,
+      contactId,
+      dealId: dealId || null,
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
+      completedAt: null,
+      createdAt: new Date(),
+      attachmentPath: attachmentPath || null,
+    }).returning();
+    const result = rows[0];
 
-    // Actualizar valor del deal si se proporcionó
     if (dealValue && typeof dealValue === "number" && dealValue > 0) {
-      const dealToUpdate = dealId
-        ? db.select().from(deals).where(eq(deals.id, dealId)).get()
-        : db.select().from(deals).where(eq(deals.contactId, contactId)).get();
+      const dealRows = dealId
+        ? await db.select().from(deals).where(eq(deals.id, dealId))
+        : await db.select().from(deals).where(eq(deals.contactId, contactId));
+      const dealToUpdate = dealRows[0];
       if (dealToUpdate) {
-        db.update(deals).set({ value: dealValue, updatedAt: new Date() }).where(eq(deals.id, dealToUpdate.id)).run();
+        await db.update(deals).set({ value: dealValue, updatedAt: new Date() }).where(eq(deals.id, dealToUpdate.id));
       }
     }
 
-    // Automatismo: mover etapa + temperatura según tipo de actividad
     await aplicarReglasPipeline(type, contactId, dealId || null);
 
-    // Envío automático de email si es cotización con PDF adjunto
     if (type === "cotizacion" && attachmentPath) {
       await enviarEmailCotizacion(contactId, result.id, attachmentPath).catch(() => {});
     }
-
-    // Envío automático de email si es visita programada con fecha
     if (type === "visita" && scheduledAt) {
       await enviarEmailVisita(contactId, scheduledAt).catch(() => {});
     }
-    await recalcularTemperatura(contactId);
 
+    await recalcularTemperatura(contactId);
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown";
-    return NextResponse.json(
-      { error: `Error al crear actividad: ${msg}` },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: `Error al crear actividad: ${msg}` }, { status: 500 });
   }
 }
 
@@ -118,36 +102,29 @@ async function aplicarReglasPipeline(type: string, contactId: string, dealId: st
   const rule = STAGE_RULES[type];
   if (!rule) return;
 
-  // Forzar temperatura directamente
-  db.update(contacts)
-    .set({ temperature: rule.temperature, updatedAt: new Date() })
-    .where(eq(contacts.id, contactId))
-    .run();
+  await db.update(contacts).set({ temperature: rule.temperature, updatedAt: new Date() }).where(eq(contacts.id, contactId));
 
-  // Buscar la etapa destino
-  const stages = db.select().from(pipelineStages).orderBy(asc(pipelineStages.order)).all();
+  const stages = await db.select().from(pipelineStages).orderBy(asc(pipelineStages.order));
   const targetStage = stages.find((s) => s.name === rule.stageName);
   if (!targetStage) return;
 
-  // Mover el deal asociado (o el primer deal del contacto)
-  const dealToMove = dealId
-    ? db.select().from(deals).where(eq(deals.id, dealId)).get()
-    : db.select().from(deals).where(eq(deals.contactId, contactId)).get();
+  const dealRows = dealId
+    ? await db.select().from(deals).where(eq(deals.id, dealId))
+    : await db.select().from(deals).where(eq(deals.contactId, contactId));
+  const dealToMove = dealRows[0];
 
   if (dealToMove) {
-    db.update(deals)
-      .set({ stageId: targetStage.id, updatedAt: new Date() })
-      .where(eq(deals.id, dealToMove.id))
-      .run();
+    await db.update(deals).set({ stageId: targetStage.id, updatedAt: new Date() }).where(eq(deals.id, dealToMove.id));
   }
 }
 
 async function recalcularTemperatura(contactId: string) {
-  const contact = db.select().from(contacts).where(eq(contacts.id, contactId)).get();
+  const contactRows = await db.select().from(contacts).where(eq(contacts.id, contactId));
+  const contact = contactRows[0];
   if (!contact) return;
 
-  const contactActivities = db.select().from(activities).where(eq(activities.contactId, contactId)).all();
-  const contactDeals = db.select().from(deals).where(eq(deals.contactId, contactId)).all();
+  const contactActivities = await db.select().from(activities).where(eq(activities.contactId, contactId));
+  const contactDeals = await db.select().from(deals).where(eq(deals.contactId, contactId));
 
   if (isAIEnabled()) {
     try {
@@ -156,28 +133,23 @@ async function recalcularTemperatura(contactId: string) {
         contactActivities.map((a) => ({
           type: a.type as "call" | "email" | "meeting" | "note" | "follow_up",
           description: a.description,
-          date: a.createdAt ? new Date(typeof a.createdAt === "number" ? a.createdAt * 1000 : a.createdAt).toISOString() : "unknown",
+          date: a.createdAt ? new Date(a.createdAt).toISOString() : "unknown",
         }))
       );
-      db.update(contacts).set({ temperature: result.temperature, score: result.score, updatedAt: new Date() }).where(eq(contacts.id, contactId)).run();
+      await db.update(contacts).set({ temperature: result.temperature, score: result.score, updatedAt: new Date() }).where(eq(contacts.id, contactId));
       return;
-    } catch {
-      // fall through to rule-based
-    }
+    } catch { /* fall through */ }
   }
 
-  const lastActivity = [...contactActivities].sort((a, b) => {
-    const aTime = typeof a.createdAt === "number" ? a.createdAt : a.createdAt?.getTime() || 0;
-    const bTime = typeof b.createdAt === "number" ? b.createdAt : b.createdAt?.getTime() || 0;
-    return bTime - aTime;
-  })[0];
+  const lastActivity = [...contactActivities].sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )[0];
 
   const daysSinceLastActivity = lastActivity
-    ? Math.floor((Date.now() - (typeof lastActivity.createdAt === "number" ? lastActivity.createdAt * 1000 : lastActivity.createdAt?.getTime() || Date.now())) / (1000 * 60 * 60 * 24))
+    ? Math.floor((Date.now() - new Date(lastActivity.createdAt).getTime()) / (1000 * 60 * 60 * 24))
     : 999;
 
   const totalDealValue = contactDeals.reduce((sum, d) => sum + (d.value || 0), 0);
-
   const score = calculateLeadScore({
     temperature: contact.temperature as "cold" | "warm" | "hot",
     hasEmail: !!contact.email,
@@ -188,28 +160,24 @@ async function recalcularTemperatura(contactId: string) {
     hasDeals: contactDeals.length > 0,
     dealValue: totalDealValue,
   });
-
   const temperature = suggestTemperature(score);
-  db.update(contacts).set({ temperature, score, updatedAt: new Date() }).where(eq(contacts.id, contactId)).run();
+  await db.update(contacts).set({ temperature, score, updatedAt: new Date() }).where(eq(contacts.id, contactId));
 }
 
 async function enviarEmailVisita(contactId: string, scheduledAt: string) {
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return;
-
-  const contact = db.select().from(contacts).where(eq(contacts.id, contactId)).get();
+  const rows = await db.select().from(contacts).where(eq(contacts.id, contactId));
+  const contact = rows[0];
   if (!contact?.email) return;
 
   const fecha = new Date(scheduledAt);
-  const opciones: Intl.DateTimeFormatOptions = {
+  const fechaFormateada = fecha.toLocaleDateString("es-CL", {
     weekday: "long", year: "numeric", month: "long", day: "numeric",
     hour: "2-digit", minute: "2-digit", timeZone: "America/Santiago",
-  };
-  const fechaFormateada = fecha.toLocaleDateString("es-CL", opciones);
+  });
 
   const transporter = nodemailer.createTransport({
-    host: "smtppro.zoho.com",
-    port: 465,
-    secure: true,
+    host: "smtppro.zoho.com", port: 465, secure: true,
     auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
   });
 
@@ -231,17 +199,15 @@ async function enviarEmailVisita(contactId: string, scheduledAt: string) {
 
 async function enviarEmailCotizacion(contactId: string, activityId: string, attachmentPath: string) {
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) return;
-
-  const contact = db.select().from(contacts).where(eq(contacts.id, contactId)).get();
+  const rows = await db.select().from(contacts).where(eq(contacts.id, contactId));
+  const contact = rows[0];
   if (!contact?.email) return;
 
   const fullPath = path.join(process.cwd(), "data", attachmentPath);
   if (!fs.existsSync(fullPath)) return;
 
   const transporter = nodemailer.createTransport({
-    host: "smtppro.zoho.com",
-    port: 465,
-    secure: true,
+    host: "smtppro.zoho.com", port: 465, secure: true,
     auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
   });
 

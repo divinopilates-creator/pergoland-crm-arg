@@ -13,41 +13,38 @@ export default async function ContactDetailPage({
 }) {
   const { id } = await params;
 
-  const contact = db.select().from(contacts).where(eq(contacts.id, id)).get();
+  const contactRows = await db.select().from(contacts).where(eq(contacts.id, id));
+  const contact = contactRows[0];
   if (!contact) notFound();
 
-  const contactDeals = db
-    .select({
-      id: deals.id,
-      title: deals.title,
-      value: deals.value,
-      stageId: deals.stageId,
-      probability: deals.probability,
-      createdAt: deals.createdAt,
-      stageName: pipelineStages.name,
-      stageColor: pipelineStages.color,
-    })
-    .from(deals)
-    .leftJoin(pipelineStages, eq(deals.stageId, pipelineStages.id))
-    .where(eq(deals.contactId, id))
-    .all();
+  const contactDeals = await db.select({
+    id: deals.id,
+    title: deals.title,
+    value: deals.value,
+    stageId: deals.stageId,
+    probability: deals.probability,
+    createdAt: deals.createdAt,
+    stageName: pipelineStages.name,
+    stageColor: pipelineStages.color,
+  })
+  .from(deals)
+  .leftJoin(pipelineStages, eq(deals.stageId, pipelineStages.id))
+  .where(eq(deals.contactId, id));
 
-  const contactActivities = db
-    .select({
-      id: activities.id,
-      type: activities.type,
-      description: activities.description,
-      contactId: activities.contactId,
-      dealId: activities.dealId,
-      scheduledAt: activities.scheduledAt,
-      completedAt: activities.completedAt,
-      attachmentPath: activities.attachmentPath,
-      createdAt: activities.createdAt,
-    })
-    .from(activities)
-    .where(eq(activities.contactId, id))
-    .orderBy(desc(activities.createdAt))
-    .all();
+  const contactActivities = await db.select({
+    id: activities.id,
+    type: activities.type,
+    description: activities.description,
+    contactId: activities.contactId,
+    dealId: activities.dealId,
+    scheduledAt: activities.scheduledAt,
+    completedAt: activities.completedAt,
+    attachmentPath: activities.attachmentPath,
+    createdAt: activities.createdAt,
+  })
+  .from(activities)
+  .where(eq(activities.contactId, id))
+  .orderBy(desc(activities.createdAt));
 
   return (
     <ContactDetailClient

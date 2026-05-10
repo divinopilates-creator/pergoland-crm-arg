@@ -390,3 +390,53 @@ export function ContactDetailClient({
                               )}
                             </div>
                           )}
+<p className="text-xs text-muted-foreground mt-0.5">{formatRelativeDate(activity.createdAt)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )
+            ) : (
+              contact.phone && <WhatsAppChat phone={contact.phone} contactName={contact.name} />
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <ContactForm
+        open={showEditForm}
+        onClose={() => {
+          setShowEditForm(false);
+          router.refresh();
+        }}
+        initialData={{
+          id: contact.id,
+          name: contact.name,
+          email: contact.email || "",
+          phone: contact.phone || "",
+          company: contact.company || "",
+          source: contact.source,
+          temperature: contact.temperature as "cold" | "warm" | "hot",
+          notes: contact.notes || "",
+          comuna: contact.comuna || "",
+          medidas: contact.medidas || "",
+          modelo: contact.modelo || "",
+          tipo_cielo: contact.tipo_cielo || "",
+          presupuesto_estimado: contact.presupuesto_estimado?.toString() || "",
+          fecha_visita: contact.fecha_visita ? new Date(contact.fecha_visita).toISOString().slice(0, 16) : "",
+          direccion: contact.direccion || "",
+        }}
+      />
+
+      <ActivityForm
+        open={showActivityForm}
+        onClose={() => {
+          setShowActivityForm(false);
+          router.refresh();
+        }}
+        preselectedContactId={contact.id}
+      />
+    </div>
+  );
+}

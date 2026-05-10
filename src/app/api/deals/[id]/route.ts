@@ -8,17 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-
-  const deal = db.select().from(deals).where(eq(deals.id, id)).get();
-
-  if (!deal) {
-    return NextResponse.json(
-      { error: "Deal no encontrado" },
-      { status: 404 }
-    );
-  }
-
-  return NextResponse.json(deal);
+  const rows = await db.select().from(deals).where(eq(deals.id, id));
+  if (!rows[0]) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  return NextResponse.json(rows[0]);
 }
 
 export async function PUT(
@@ -26,7 +18,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-
   let body;
   try {
     body = await request.json();
@@ -34,37 +25,27 @@ export async function PUT(
     return NextResponse.json({ error: "JSON invalido" }, { status: 400 });
   }
 
-  const existing = db.select().from(deals).where(eq(deals.id, id)).get();
+  try {
+    const rows = await db.update(deals).set({
+      title:         typeof body.title === "string" ? body.title : undefined,
+      value:         typeof body.value === "number" ? body.value : undefined,
+      stageId:       typeof body.stageId === "string" ? body.stageId : undefined,
+      probability:   typeof body.probability === "number" ? body.probability : undefined,
+      notes:         typeof body.notes === "string" ? body.notes || null : undefined,
+      expectedClose: body.expectedClose ? new Date(body.expectedClose) : null,
+      updatedAt:     new Date(),
+    })
+    .where(eq(deals.id, id))
+    .returning();
 
-  if (!existing) {
+    if (!rows[0]) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+    return NextResponse.json(rows[0]);
+  } catch (error) {
     return NextResponse.json(
-      { error: "Deal no encontrado" },
-      { status: 404 }
+      { error: `Error al actualizar: ${error instanceof Error ? error.message : "Unknown"}` },
+      { status: 500 }
     );
   }
-
-  // Only allow updating specific fields
-  const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.title !== undefined) updateData.title = body.title;
-  if (body.value !== undefined) updateData.value = body.value;
-  if (body.stageId !== undefined) updateData.stageId = body.stageId;
-  if (body.contactId !== undefined) updateData.contactId = body.contactId;
-  if (body.expectedClose !== undefined) {
-    updateData.expectedClose = body.expectedClose ? new Date(body.expectedClose) : null;
-  }
-  if (body.probability !== undefined) {
-    updateData.probability = Math.max(0, Math.min(100, Number(body.probability)));
-  }
-  if (body.notes !== undefined) updateData.notes = body.notes;
-
-  const result = db
-    .update(deals)
-    .set(updateData)
-    .where(eq(deals.id, id))
-    .returning()
-    .get();
-
-  return NextResponse.json(result);
 }
 
 export async function DELETE(
@@ -72,16 +53,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-
-  const existing = db.select().from(deals).where(eq(deals.id, id)).get();
-
-  if (!existing) {
+  try {
+    await db.delete(deals).where(eq(deals.id, id));
+    return NextResponse.json({ success: true });
+  } catch (error) {
     return NextResponse.json(
-      { error: "Deal no encontrado" },
-      { status: 404 }
+      { error: `Error al eliminar: ${error instanceof Error ? error.message : "Unknown"}` },
+      { status: 500 }
     );
   }
-
-  db.delete(deals).where(eq(deals.id, id)).run();
-  return NextResponse.json({ success: true });
 }

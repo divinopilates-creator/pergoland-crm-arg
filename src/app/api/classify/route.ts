@@ -13,32 +13,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "JSON invalido" }, { status: 400 });
   }
   const { contactId } = body;
-
   if (!contactId) {
-    return NextResponse.json(
-      { error: "contactId es requerido" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "contactId es requerido" }, { status: 400 });
   }
 
-  const contact = db
-    .select()
-    .from(contacts)
-    .where(eq(contacts.id, contactId))
-    .get();
-
+  const contactRows = await db.select().from(contacts).where(eq(contacts.id, contactId));
+  const contact = contactRows[0];
   if (!contact) {
-    return NextResponse.json(
-      { error: "Contacto no encontrado" },
-      { status: 404 }
-    );
+    return NextResponse.json({ error: "Contacto no encontrado" }, { status: 404 });
   }
 
-  const contactActivities = db
-    .select()
-    .from(activities)
-    .where(eq(activities.contactId, contactId))
-    .all();
+  const contactActivities = await db.select().from(activities).where(eq(activities.contactId, contactId));
 
   if (isAIEnabled()) {
     try {
@@ -52,56 +37,22 @@ export async function POST(request: NextRequest) {
         contactActivities.map((a) => ({
           type: a.type as "call" | "email" | "meeting" | "note" | "follow_up",
           description: a.description,
-          date: a.createdAt
-            ? new Date(
-                typeof a.createdAt === "number"
-                  ? a.createdAt * 1000
-                  : a.createdAt
-              ).toISOString()
-            : "unknown",
+          date: a.createdAt ? new Date(a.createdAt).toISOString() : "unknown",
         }))
       );
-
-      // Update contact with AI classification
-      db.update(contacts)
-        .set({
-          temperature: result.temperature,
-          score: result.score,
-          updatedAt: new Date(),
-        })
-        .where(eq(contacts.id, contactId))
-      .run();
-
-      return NextResponse.json({
-        ...result,
-        mode: "ai",
-      });
-    } catch {
-      // AI failed — fall through to rule-based scoring below
-    }
+      await db.update(contacts)
+        .set({ temperature: result.temperature, score: result.score, updatedAt: new Date() })
+        .where(eq(contacts.id, contactId));
+      return NextResponse.json({ ...result, mode: "ai" });
+    } catch { /* fall through */ }
   }
 
-  // Rule-based fallback
-  const lastActivity = contactActivities.sort((a, b) => {
-    const aTime =
-      typeof a.createdAt === "number"
-        ? a.createdAt
-        : a.createdAt?.getTime() || 0;
-    const bTime =
-      typeof b.createdAt === "number"
-        ? b.createdAt
-        : b.createdAt?.getTime() || 0;
-    return bTime - aTime;
-  })[0];
+  const lastActivity = [...contactActivities].sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )[0];
 
   const daysSinceLastActivity = lastActivity
-    ? Math.floor(
-        (Date.now() -
-          (typeof lastActivity.createdAt === "number"
-            ? lastActivity.createdAt * 1000
-            : lastActivity.createdAt?.getTime() || Date.now())) /
-          (1000 * 60 * 60 * 24)
-      )
+    ? Math.floor((Date.now() - new Date(lastActivity.createdAt).getTime()) / (1000 * 60 * 60 * 24))
     : 999;
 
   const score = calculateLeadScore({
@@ -114,17 +65,13 @@ export async function POST(request: NextRequest) {
     hasDeals: false,
     dealValue: 0,
   });
-
   const temperature = suggestTemperature(score);
-
-  db.update(contacts)
+  await db.update(contacts)
     .set({ temperature, score, updatedAt: new Date() })
-    .where(eq(contacts.id, contactId))
-    .run();
+    .where(eq(contacts.id, contactId));
 
   return NextResponse.json({
-    temperature,
-    score,
+    temperature, score,
     nextAction: "Revisar manualmente y dar seguimiento",
     reasoning: "Clasificacion basada en reglas (sin API key)",
     mode: "rules",

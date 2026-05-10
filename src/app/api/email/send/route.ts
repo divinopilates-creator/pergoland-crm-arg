@@ -6,18 +6,6 @@ import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
 
-function createTransporter() {
-  return nodemailer.createTransport({
-    host: "smtppro.zoho.com",
-    port: 465,
-    secure: true,
-    auth: {
-      user: process.env.GMAIL_USER,
-      pass: process.env.GMAIL_APP_PASSWORD,
-    },
-  });
-}
-
 export async function POST(request: NextRequest) {
   let body: { contactId: string; activityId: string };
   try {
@@ -27,20 +15,20 @@ export async function POST(request: NextRequest) {
   }
 
   const { contactId, activityId } = body;
-
   if (!contactId || !activityId) {
     return NextResponse.json({ error: "contactId y activityId son requeridos" }, { status: 400 });
   }
-
   if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
-    return NextResponse.json({ error: "Email no configurado. Agrega GMAIL_USER y GMAIL_APP_PASSWORD al .env" }, { status: 500 });
+    return NextResponse.json({ error: "Email no configurado" }, { status: 500 });
   }
 
-  const contact = db.select().from(contacts).where(eq(contacts.id, contactId)).get();
+  const contactRows = await db.select().from(contacts).where(eq(contacts.id, contactId));
+  const contact = contactRows[0];
   if (!contact) return NextResponse.json({ error: "Contacto no encontrado" }, { status: 404 });
-  if (!contact.email) return NextResponse.json({ error: "El contacto no tiene email registrado" }, { status: 400 });
+  if (!contact.email) return NextResponse.json({ error: "El contacto no tiene email" }, { status: 400 });
 
-  const activity = db.select().from(activities).where(eq(activities.id, activityId)).get();
+  const activityRows = await db.select().from(activities).where(eq(activities.id, activityId));
+  const activity = activityRows[0];
   if (!activity) return NextResponse.json({ error: "Actividad no encontrada" }, { status: 404 });
 
   const attachments = [];
@@ -56,7 +44,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const transporter = createTransporter();
+    const transporter = nodemailer.createTransport({
+      host: "smtppro.zoho.com", port: 465, secure: true,
+      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_APP_PASSWORD },
+    });
     await transporter.sendMail({
       from: `"Pergoland Chile" <${process.env.GMAIL_USER}>`,
       to: contact.email,
@@ -70,10 +61,10 @@ export async function POST(request: NextRequest) {
       `,
       attachments,
     });
-
     return NextResponse.json({ success: true, to: contact.email });
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "Unknown";
-    return NextResponse.json({ error: `Error al enviar email: ${msg}` }, { status: 500 });
+    return NextResponse.json({
+      error: `Error al enviar: ${error instanceof Error ? error.message : "Unknown"}`,
+    }, { status: 500 });
   }
 }

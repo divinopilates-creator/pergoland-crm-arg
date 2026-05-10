@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { contacts, deals, activities } from "@/db/schema";
+import { contacts } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function GET(
@@ -8,37 +8,9 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-
-  const contact = db
-    .select()
-    .from(contacts)
-    .where(eq(contacts.id, id))
-    .get();
-
-  if (!contact) {
-    return NextResponse.json(
-      { error: "Contacto no encontrado" },
-      { status: 404 }
-    );
-  }
-
-  const contactDeals = db
-    .select()
-    .from(deals)
-    .where(eq(deals.contactId, id))
-    .all();
-
-  const contactActivities = db
-    .select()
-    .from(activities)
-    .where(eq(activities.contactId, id))
-    .all();
-
-  return NextResponse.json({
-    ...contact,
-    deals: contactDeals,
-    activities: contactActivities,
-  });
+  const rows = await db.select().from(contacts).where(eq(contacts.id, id));
+  if (!rows[0]) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+  return NextResponse.json(rows[0]);
 }
 
 export async function PUT(
@@ -46,46 +18,43 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-
-  let body;
+  let body: Record<string, unknown>;
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "JSON invalido" }, { status: 400 });
   }
 
-  const existing = db
-    .select()
-    .from(contacts)
+  const now = new Date();
+  try {
+    const rows = await db.update(contacts).set({
+      name:                 typeof body.name === "string" ? body.name : undefined,
+      email:                typeof body.email === "string" ? body.email || null : undefined,
+      phone:                typeof body.phone === "string" ? body.phone || null : undefined,
+      company:              typeof body.company === "string" ? body.company || null : undefined,
+      source:               typeof body.source === "string" ? body.source : undefined,
+      temperature:          typeof body.temperature === "string" ? body.temperature : undefined,
+      notes:                typeof body.notes === "string" ? body.notes || null : undefined,
+      comuna:               typeof body.comuna === "string" ? body.comuna || null : undefined,
+      medidas:              typeof body.medidas === "string" ? body.medidas || null : undefined,
+      modelo:               typeof body.modelo === "string" ? body.modelo || null : undefined,
+      tipo_cielo:           typeof body.tipo_cielo === "string" ? body.tipo_cielo || null : undefined,
+      presupuesto_estimado: typeof body.presupuesto_estimado === "number" ? body.presupuesto_estimado : null,
+      fecha_visita:         body.fecha_visita ? new Date(body.fecha_visita as string) : null,
+      direccion:            typeof body.direccion === "string" ? body.direccion || null : undefined,
+      updatedAt:            now,
+    })
     .where(eq(contacts.id, id))
-    .get();
+    .returning();
 
-  if (!existing) {
+    if (!rows[0]) return NextResponse.json({ error: "No encontrado" }, { status: 404 });
+    return NextResponse.json(rows[0]);
+  } catch (error) {
     return NextResponse.json(
-      { error: "Contacto no encontrado" },
-      { status: 404 }
+      { error: `Error al actualizar: ${error instanceof Error ? error.message : "Unknown"}` },
+      { status: 500 }
     );
   }
-
-  // Only allow updating specific fields
-  const updateData: Record<string, unknown> = { updatedAt: new Date() };
-  if (body.name !== undefined) updateData.name = body.name;
-  if (body.email !== undefined) updateData.email = body.email;
-  if (body.phone !== undefined) updateData.phone = body.phone;
-  if (body.company !== undefined) updateData.company = body.company;
-  if (body.source !== undefined) updateData.source = body.source;
-  if (body.temperature !== undefined) updateData.temperature = body.temperature;
-  if (body.score !== undefined) updateData.score = Math.max(0, Math.min(100, body.score));
-  if (body.notes !== undefined) updateData.notes = body.notes;
-
-  const result = db
-    .update(contacts)
-    .set(updateData)
-    .where(eq(contacts.id, id))
-    .returning()
-    .get();
-
-  return NextResponse.json(result);
 }
 
 export async function DELETE(
@@ -93,20 +62,13 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-
-  const existing = db
-    .select()
-    .from(contacts)
-    .where(eq(contacts.id, id))
-    .get();
-
-  if (!existing) {
+  try {
+    await db.delete(contacts).where(eq(contacts.id, id));
+    return NextResponse.json({ success: true });
+  } catch (error) {
     return NextResponse.json(
-      { error: "Contacto no encontrado" },
-      { status: 404 }
+      { error: `Error al eliminar: ${error instanceof Error ? error.message : "Unknown"}` },
+      { status: 500 }
     );
   }
-
-  db.delete(contacts).where(eq(contacts.id, id)).run();
-  return NextResponse.json({ success: true });
 }

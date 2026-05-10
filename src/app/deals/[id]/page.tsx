@@ -19,27 +19,19 @@ export default async function DealDetailPage({
 }) {
   const { id } = await params;
 
-  const deal = db.select().from(deals).where(eq(deals.id, id)).get();
+  const dealRows = await db.select().from(deals).where(eq(deals.id, id));
+  const deal = dealRows[0];
   if (!deal) notFound();
 
-  const contact = db
-    .select()
-    .from(contacts)
-    .where(eq(contacts.id, deal.contactId))
-    .get();
+  const contactRows = await db.select().from(contacts).where(eq(contacts.id, deal.contactId));
+  const contact = contactRows[0];
 
-  const stage = db
-    .select()
-    .from(pipelineStages)
-    .where(eq(pipelineStages.id, deal.stageId))
-    .get();
+  const stageRows = await db.select().from(pipelineStages).where(eq(pipelineStages.id, deal.stageId));
+  const stage = stageRows[0];
 
-  const dealActivities = db
-    .select()
-    .from(activities)
+  const dealActivities = await db.select().from(activities)
     .where(eq(activities.dealId, id))
-    .orderBy(desc(activities.createdAt))
-    .all();
+    .orderBy(desc(activities.createdAt));
 
   return (
     <div className="space-y-6">
@@ -53,19 +45,13 @@ export default async function DealDetailPage({
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">{deal.title}</h1>
             {stage && (
-              <Badge
-                variant="outline"
-                style={{ borderColor: stage.color, color: stage.color }}
-              >
+              <Badge variant="outline" style={{ borderColor: stage.color, color: stage.color }}>
                 {stage.name}
               </Badge>
             )}
           </div>
           {contact && (
-            <Link
-              href={`/contacts/${contact.id}`}
-              className="text-muted-foreground hover:text-primary text-sm"
-            >
+            <Link href={`/contacts/${contact.id}`} className="text-muted-foreground hover:text-primary text-sm">
               {contact.name}
             </Link>
           )}
@@ -76,19 +62,15 @@ export default async function DealDetailPage({
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-              <DollarSign className="h-4 w-4" />
-              Valor
+              <DollarSign className="h-4 w-4" />Valor
             </div>
-            <p className="text-xl font-bold text-primary">
-              {formatCurrency(deal.value)}
-            </p>
+            <p className="text-xl font-bold text-primary">{formatCurrency(deal.value)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-              <Percent className="h-4 w-4" />
-              Probabilidad
+              <Percent className="h-4 w-4" />Probabilidad
             </div>
             <p className="text-xl font-bold">{deal.probability}%</p>
           </CardContent>
@@ -96,19 +78,15 @@ export default async function DealDetailPage({
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-              <Calendar className="h-4 w-4" />
-              Cierre estimado
+              <Calendar className="h-4 w-4" />Cierre estimado
             </div>
-            <p className="text-xl font-bold">
-              {formatDate(deal.expectedClose)}
-            </p>
+            <p className="text-xl font-bold">{formatDate(deal.expectedClose)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-              <DollarSign className="h-4 w-4" />
-              Valor ponderado
+              <DollarSign className="h-4 w-4" />Valor ponderado
             </div>
             <p className="text-xl font-bold">
               {formatCurrency(Math.round(deal.value * (deal.probability / 100)))}
@@ -120,33 +98,21 @@ export default async function DealDetailPage({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {deal.notes && (
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Notas</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm">{deal.notes}</p>
-            </CardContent>
+            <CardHeader><CardTitle className="text-base">Notas</CardTitle></CardHeader>
+            <CardContent><p className="text-sm">{deal.notes}</p></CardContent>
           </Card>
         )}
-
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
-              Actividades ({dealActivities.length})
-            </CardTitle>
+            <CardTitle className="text-base">Actividades ({dealActivities.length})</CardTitle>
           </CardHeader>
           <CardContent>
             {dealActivities.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No hay actividades registradas para este deal
-              </p>
+              <p className="text-sm text-muted-foreground">No hay actividades registradas para este deal</p>
             ) : (
               <div className="space-y-3">
                 {dealActivities.map((activity) => {
-                  const config =
-                    ACTIVITY_TYPE_CONFIG[
-                      activity.type as keyof typeof ACTIVITY_TYPE_CONFIG
-                    ];
+                  const config = ACTIVITY_TYPE_CONFIG[activity.type as keyof typeof ACTIVITY_TYPE_CONFIG];
                   return (
                     <div key={activity.id} className="flex gap-3 items-start">
                       <div className="rounded-full bg-muted p-2 shrink-0">

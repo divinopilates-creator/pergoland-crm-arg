@@ -3,26 +3,27 @@ import { db } from "@/db";
 import { pipelineStages, deals } from "@/db/schema";
 import { eq } from "drizzle-orm";
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   const { id } = await params;
 
-  const activeDeals = db.select().from(deals).where(eq(deals.stageId, id)).all();
-  if (activeDeals.length > 0) {
-    return NextResponse.json({ error: "No se puede eliminar una etapa con deals activos" }, { status: 400 });
+  const existingDeals = await db.select().from(deals).where(eq(deals.stageId, id));
+  if (existingDeals.length > 0) {
+    return NextResponse.json(
+      { error: "No se puede eliminar una etapa con deals activos" },
+      { status: 400 }
+    );
   }
 
-  db.delete(pipelineStages).where(eq(pipelineStages.id, id)).run();
-  return NextResponse.json({ success: true });
-}
-
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const body = await req.json();
-
-  db.update(pipelineStages)
-    .set({ ...(body.order !== undefined && { order: body.order }), ...(body.name && { name: body.name }) })
-    .where(eq(pipelineStages.id, id))
-    .run();
-
-  return NextResponse.json({ success: true });
+  try {
+    await db.delete(pipelineStages).where(eq(pipelineStages.id, id));
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return NextResponse.json(
+      { error: `Error al eliminar: ${error instanceof Error ? error.message : "Unknown"}` },
+      { status: 500 }
+    );
+  }
 }
