@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { contacts, activities, deals, pipelineStages } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, asc } from "drizzle-orm";
 
 const FIELD_MAP: Record<string, string> = {
   name: "name", nombre: "name", full_name: "name", fullname: "name",
@@ -13,7 +13,7 @@ const FIELD_MAP: Record<string, string> = {
   negocio: "company", organizacion: "company",
   notes: "notes", notas: "notes", message: "notes", mensaje: "notes",
   comments: "notes", comentarios: "notes", descripcion: "notes",
-  comuna: "comuna", medidas: "medidas", modelo: "modelo",
+  zona: "comuna", comuna: "comuna", medidas: "medidas", modelo: "modelo",
   tipo_cielo: "tipo_cielo", direccion: "direccion",
 };
 
@@ -78,26 +78,26 @@ export async function POST(request: NextRequest) {
   try {
     const now = new Date();
     const rows = await db.insert(contacts).values({
-      name:       fields.name,
-      email:      fields.email || null,
-      phone:      fields.phone || null,
-      company:    fields.company || null,
-      source:     sourceOverride || "webhook",
+      name:        fields.name,
+      email:       fields.email || null,
+      phone:       fields.phone || null,
+      company:     fields.company || null,
+      source:      sourceOverride || "webhook",
       temperature: "cold",
-      score:      0,
-      notes:      fields.notes || null,
-      comuna:     fields.comuna || null,
-      medidas:    fields.medidas || null,
-      modelo:     fields.modelo || null,
-      tipo_cielo: fields.tipo_cielo || null,
-      direccion:  fields.direccion || null,
-      createdAt:  now,
-      updatedAt:  now,
+      score:       0,
+      notes:       fields.notes || null,
+      comuna:      fields.comuna || null,
+      medidas:     fields.medidas || null,
+      modelo:      fields.modelo || null,
+      tipo_cielo:  fields.tipo_cielo || null,
+      direccion:   fields.direccion || null,
+      createdAt:   now,
+      updatedAt:   now,
     }).returning();
     const contact = rows[0];
 
     if (!isDistribuidor) {
-      const stages = await db.select().from(pipelineStages).orderBy(pipelineStages.order).limit(1);
+      const stages = await db.select().from(pipelineStages).orderBy(asc(pipelineStages.order)).limit(1);
       const firstStage = stages[0];
       if (firstStage) {
         await db.insert(deals).values({
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
       type:        "note",
       description: isDistribuidor
         ? "Lead madera — derivar a distribuidor autorizado"
-        : "Lead recibido via WhatsApp - Matías",
+        : "Lead recibido via WhatsApp - Gian",
       contactId:  contact.id,
       createdAt:  now,
     });
