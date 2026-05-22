@@ -19,14 +19,38 @@ import { formatDate } from "@/lib/constants";
 import { SOURCE_LABELS } from "@/lib/constants";
 import type { Contact, Temperature, LeadSource } from "@/types";
 
+interface ContactWithEtiqueta extends Contact {
+  etiqueta?: string | null;
+  etiquetaColor?: string | null;
+}
+
 interface ContactsTableProps {
-  contacts: Contact[];
+  contacts: ContactWithEtiqueta[];
+}
+
+const ETIQUETA_COLORES: Record<string, string> = {
+  Proveedor: "#0891b2",
+  Personal:  "#7c3aed",
+  Referido:  "#059669",
+};
+
+function EtiquetaBadge({ etiqueta, color }: { etiqueta: string; color?: string | null }) {
+  const bg = color || ETIQUETA_COLORES[etiqueta] || "#64748b";
+  return (
+    <span
+      style={{ backgroundColor: bg }}
+      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white ml-2"
+    >
+      {etiqueta}
+    </span>
+  );
 }
 
 export function ContactsTable({ contacts }: ContactsTableProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [filterTemp, setFilterTemp] = useState<Temperature | "">("");
+  const [filterEtiqueta, setFilterEtiqueta] = useState<string>("");
 
   const filtered = contacts.filter((c) => {
     const matchesSearch =
@@ -36,8 +60,9 @@ export function ContactsTable({ contacts }: ContactsTableProps) {
       c.company?.toLowerCase().includes(search.toLowerCase());
 
     const matchesTemp = !filterTemp || c.temperature === filterTemp;
+    const matchesEtiqueta = !filterEtiqueta || c.etiqueta === filterEtiqueta;
 
-    return matchesSearch && matchesTemp;
+    return matchesSearch && matchesTemp && matchesEtiqueta;
   });
 
   if (contacts.length === 0) {
@@ -64,7 +89,7 @@ export function ContactsTable({ contacts }: ContactsTableProps) {
             className="pl-9"
           />
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           {(["", "hot", "warm", "cold"] as const).map((temp) => (
             <Button
               key={temp}
@@ -74,6 +99,18 @@ export function ContactsTable({ contacts }: ContactsTableProps) {
               className="cursor-pointer"
             >
               {temp === "" ? "Todos" : temp === "hot" ? "Caliente" : temp === "warm" ? "Tibio" : "Frio"}
+            </Button>
+          ))}
+          {["", "Proveedor", "Personal", "Referido"].map((etq) => (
+            <Button
+              key={etq}
+              variant={filterEtiqueta === etq ? "default" : "outline"}
+              size="sm"
+              onClick={() => setFilterEtiqueta(etq)}
+              className="cursor-pointer"
+              style={etq && filterEtiqueta === etq ? { backgroundColor: ETIQUETA_COLORES[etq], borderColor: ETIQUETA_COLORES[etq] } : {}}
+            >
+              {etq === "" ? "Sin filtro" : etq}
             </Button>
           ))}
           <Button
@@ -108,11 +145,18 @@ export function ContactsTable({ contacts }: ContactsTableProps) {
                 onClick={() => router.push(`/contacts/${contact.id}`)}
               >
                 <TableCell>
-                  <div>
-                    <p className="font-medium">{contact.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {contact.email || "Sin email"}
-                    </p>
+                  <div className="flex items-center flex-wrap gap-1">
+                    <div>
+                      <p className="font-medium flex items-center">
+                        {contact.name}
+                        {contact.etiqueta && (
+                          <EtiquetaBadge etiqueta={contact.etiqueta} color={contact.etiquetaColor} />
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {contact.email || "Sin email"}
+                      </p>
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">

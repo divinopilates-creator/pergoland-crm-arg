@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { contacts } from "@/db/schema";
+import { contacts, deals, pipelineStages } from "@/db/schema";
 import { eq, like, or, desc } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
@@ -26,7 +26,28 @@ export async function GET(request: NextRequest) {
   }
 
   const results = await query.orderBy(desc(contacts.createdAt));
-  return NextResponse.json(results);
+
+  // Obtener stageName del deal activo para cada contacto
+  const enriched = await Promise.all(results.map(async (contact) => {
+    const dealRows = await db
+      .select({ stageName: pipelineStages.name, stageColor: pipelineStages.color })
+      .from(deals)
+      .leftJoin(pipelineStages, eq(deals.stageId, pipelineStages.id))
+      .where(eq(deals.contactId, contact.id))
+      .limit(1);
+
+    const stageName = dealRows[0]?.stageName || null;
+    const stageColor = dealRows[0]?.stageColor || null;
+
+    // Solo mostrar etiqueta si es Proveedor, Personal o Referido
+    const ETIQUETAS = ["Proveedor", "Personal", "Referido"];
+    const etiqueta = stageName && ETIQUETAS.includes(stageName) ? stageName : null;
+    const etiquetaColor = etiqueta ? stageColor : null;
+
+    return { ...contact, etiqueta, etiquetaColor };
+  }));
+
+  return NextResponse.json(enriched);
 }
 
 export async function POST(request: NextRequest) {
@@ -38,6 +59,7 @@ export async function POST(request: NextRequest) {
   }
 
   const { name, email, phone, company, source, temperature, score, notes } = body;
+
   if (!name) {
     return NextResponse.json({ error: "El nombre es requerido" }, { status: 400 });
   }
