@@ -7,7 +7,7 @@ async function migrate() {
   const updated = await sql`
     UPDATE pipeline_stages 
     SET name = 'Enviar Cotizacion'
-    WHERE name = 'Pendiente de Calificacion'
+    WHERE name = 'Pendiente Calificacion'
   `;
   console.log(updated.count > 0 ? "✅ Renombrada: Pendiente → Enviar Cotizacion" : "⚠️  Ya estaba renombrada");
 

@@ -143,7 +143,7 @@ export function ContactDetailClient({
         body: JSON.stringify({ completedAt: new Date().toISOString() }),
       });
       if (!res.ok) throw new Error("Error");
-      toast.success("Actividad completada");
+      toast.success("Actividad completada ✅");
       router.refresh();
     } catch {
       toast.error("Error al completar la actividad");
@@ -255,7 +255,7 @@ export function ContactDetailClient({
                 )}
                 {contact.modelo && (
                   <div className="flex items-center gap-2 text-sm">
-                    <span>🏗️</span>
+                    <span>🗏️</span>
                     <span className="text-muted-foreground">Modelo:</span>
                     <span className="font-medium">{contact.modelo}</span>
                   </div>
@@ -360,24 +360,38 @@ export function ContactDetailClient({
                   {activities.map((activity) => {
                     const Icon = activityIcons[activity.type] || FileText;
                     const config = ACTIVITY_TYPE_CONFIG[activity.type as ActivityType];
-                    const isPending = !activity.completedAt && activity.scheduledAt;
+                    // Mostrar botón Completar en TODAS las actividades no completadas
+                    const isPending = !activity.completedAt;
                     return (
                       <div key={activity.id} className="flex gap-3">
-                        <div className="rounded-full bg-muted p-2 h-fit shrink-0">
-                          <Icon className="h-3.5 w-3.5 text-muted-foreground" />
+                        <div className={`rounded-full p-2 h-fit shrink-0 ${activity.completedAt ? "bg-green-100" : "bg-muted"}`}>
+                          <Icon className={`h-3.5 w-3.5 ${activity.completedAt ? "text-green-600" : "text-muted-foreground"}`} />
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="secondary" className="text-xs">
                               {config?.label || activity.type}
                             </Badge>
-                            {isPending && (
-                              <Badge variant="outline" className="text-xs text-orange-600 border-orange-600 cursor-pointer" onClick={() => handleCompleteActivity(activity.id)}>
+                            {activity.completedAt ? (
+                              <Badge variant="outline" className="text-xs text-green-600 border-green-600">
+                                ✅ Completada
+                              </Badge>
+                            ) : (
+                              <Badge
+                                variant="outline"
+                                className="text-xs text-orange-600 border-orange-600 cursor-pointer hover:bg-orange-50"
+                                onClick={() => handleCompleteActivity(activity.id)}
+                              >
                                 Completar
                               </Badge>
                             )}
                           </div>
                           <p className="text-sm mt-1">{activity.description}</p>
+                          {activity.scheduledAt && !activity.completedAt && (
+                            <p className="text-xs text-orange-600 mt-0.5">
+                              📅 {new Date(activity.scheduledAt).toLocaleDateString("es-CL", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          )}
                           {activity.attachmentPath && (
                             <div className="flex items-center gap-2 mt-1.5">
                               <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
@@ -390,7 +404,7 @@ export function ContactDetailClient({
                               )}
                             </div>
                           )}
-<p className="text-xs text-muted-foreground mt-0.5">{formatRelativeDate(activity.createdAt)}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{formatRelativeDate(activity.createdAt)}</p>
                         </div>
                       </div>
                     );
