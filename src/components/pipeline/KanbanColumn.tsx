@@ -55,7 +55,7 @@ export function KanbanColumn({ id, name, color, deals }: KanbanColumnProps) {
         items={deals.map((d) => d.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex-1 p-2 space-y-2 min-h-[100px] overflow-y-auto">
+        <div className="flex-1 p-2 space-y-2 min-h-[280px] overflow-y-auto">
           {deals.map((deal) => (
             <DealCard key={deal.id} {...deal} />
           ))}
