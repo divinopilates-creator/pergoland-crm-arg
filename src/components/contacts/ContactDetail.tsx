@@ -11,7 +11,7 @@ import { ActivityForm } from "@/components/activities/ActivityForm";
 import {
   ArrowLeft, Mail, Phone, Building2, Calendar, FileText,
   Clock, Users, Pencil, Trash2, Plus, MessageCircle,
-  Copy, Check, Send, Paperclip, Tag,
+  Copy, Check, Send, Paperclip, Tag, ChevronDown,
 } from "lucide-react";
 import { formatCurrency, formatDate, formatRelativeDate, cleanPhoneForWhatsApp } from "@/lib/constants";
 import { ACTIVITY_TYPE_CONFIG, SOURCE_LABELS } from "@/lib/constants";
@@ -27,6 +27,8 @@ const ETIQUETAS_ESPECIALES = ["Proveedor", "Personal", "Referido"];
 const ETIQUETA_COLORES: Record<string, string> = {
   Proveedor: "#0891b2", Personal: "#7c3aed", Referido: "#059669",
 };
+
+interface Stage { id: string; name: string; color: string; }
 
 interface ContactDetailClientProps {
   contact: {
@@ -55,45 +57,42 @@ export function ContactDetailClient({ contact, deals, activities }: ContactDetai
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"actividades" | "conversacion">("actividades");
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
-  const [etiquetaStages, setEtiquetaStages] = useState<Array<{ id: string; name: string }>>([]);
-  const [assigningEtiqueta, setAssigningEtiqueta] = useState(false);
+  const [allStages, setAllStages] = useState<Stage[]>([]);
+  const [movingDeal, setMovingDeal] = useState(false);
+  const [showStageDropdown, setShowStageDropdown] = useState(false);
 
-  // Etiqueta actual del contacto
   const etiquetaActual = deals[0]?.stageName && ETIQUETAS_ESPECIALES.includes(deals[0].stageName)
     ? deals[0].stageName : null;
+  const stageActual = deals[0]?.stageName || null;
+  const stageColorActual = deals[0]?.stageColor || null;
 
-  // Cargar etapas especiales al montar
   useEffect(() => {
     fetch("/api/pipeline")
       .then((r) => r.json())
-      .then((stages: Array<{ id: string; name: string }>) => {
-        setEtiquetaStages(stages.filter((s) => ETIQUETAS_ESPECIALES.includes(s.name)));
-      });
+      .then((stages: Stage[]) => setAllStages(stages));
   }, []);
 
-  const handleAsignarEtiqueta = async (stageName: string) => {
-    const deal = deals[0];
-    if (!deal) {
-      toast.error("Este contacto no tiene un deal activo");
-      return;
-    }
-    const stage = etiquetaStages.find((s) => s.name === stageName);
-    if (!stage) return;
+  const pipelineStages = allStages.filter((s) => !ETIQUETAS_ESPECIALES.includes(s.name));
+  const etiquetaStages = allStages.filter((s) => ETIQUETAS_ESPECIALES.includes(s.name));
 
-    setAssigningEtiqueta(true);
+  const handleMoverDeal = async (stageId: string, stageName: string) => {
+    const deal = deals[0];
+    if (!deal) { toast.error("Este contacto no tiene un deal activo"); return; }
+    setMovingDeal(true);
+    setShowStageDropdown(false);
     try {
       const res = await fetch("/api/pipeline", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dealId: deal.id, stageId: stage.id }),
+        body: JSON.stringify({ dealId: deal.id, stageId }),
       });
       if (!res.ok) throw new Error("Error");
-      toast.success(`Etiqueta "${stageName}" asignada`);
+      toast.success(`Deal movido a "${stageName}"`);
       router.refresh();
     } catch {
-      toast.error("Error al asignar etiqueta");
+      toast.error("Error al mover el deal");
     } finally {
-      setAssigningEtiqueta(false);
+      setMovingDeal(false);
     }
   };
 
@@ -121,9 +120,7 @@ export function ContactDetailClient({ contact, deals, activities }: ContactDetai
       setCopiedField(field);
       toast.success("Copiado");
       setTimeout(() => setCopiedField(null), 2000);
-    } catch {
-      toast.error("Error al copiar");
-    }
+    } catch { toast.error("Error al copiar"); }
   };
 
   const handleDelete = async () => {
@@ -133,9 +130,7 @@ export function ContactDetailClient({ contact, deals, activities }: ContactDetai
       if (!res.ok) throw new Error("Error al eliminar");
       toast.success("Contacto eliminado");
       router.push("/contacts");
-    } catch {
-      toast.error("Error al eliminar el contacto");
-    }
+    } catch { toast.error("Error al eliminar el contacto"); }
   };
 
   const handleCompleteActivity = async (activityId: string) => {
@@ -148,15 +143,13 @@ export function ContactDetailClient({ contact, deals, activities }: ContactDetai
       if (!res.ok) throw new Error("Error");
       toast.success("Actividad completada ✅");
       router.refresh();
-    } catch {
-      toast.error("Error al completar la actividad");
-    }
+    } catch { toast.error("Error al completar la actividad"); }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => router.push("/contacts")} className="cursor-pointer" aria-label="Volver a contactos">
+        <Button variant="ghost" size="icon" onClick={() => router.push("/contacts")} className="cursor-pointer">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex-1">
@@ -174,26 +167,7 @@ export function ContactDetailClient({ contact, deals, activities }: ContactDetai
             Score: {contact.score}/100 · {SOURCE_LABELS[contact.source as LeadSource] || contact.source}
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          {/* Selector de etiqueta */}
-          <div className="flex items-center gap-1">
-            <Tag className="h-4 w-4 text-muted-foreground" />
-            {etiquetaStages.map((stage) => (
-              <button
-                key={stage.id}
-                disabled={assigningEtiqueta}
-                onClick={() => handleAsignarEtiqueta(stage.name)}
-                style={{
-                  backgroundColor: etiquetaActual === stage.name ? ETIQUETA_COLORES[stage.name] : "transparent",
-                  borderColor: ETIQUETA_COLORES[stage.name],
-                  color: etiquetaActual === stage.name ? "white" : ETIQUETA_COLORES[stage.name],
-                }}
-                className="px-2 py-0.5 rounded-full text-xs font-medium border cursor-pointer hover:opacity-80 transition-opacity disabled:opacity-50"
-              >
-                {stage.name}
-              </button>
-            ))}
-          </div>
+        <div className="flex gap-2 flex-wrap items-center">
           <Button variant="outline" size="sm" onClick={() => setShowEditForm(true)} className="cursor-pointer">
             <Pencil className="h-4 w-4 mr-1" /> Editar
           </Button>
@@ -223,10 +197,10 @@ export function ContactDetailClient({ contact, deals, activities }: ContactDetai
                 <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
                 <span className="flex-1">{contact.phone}</span>
                 <div className="flex items-center gap-1">
-                  <a href={`https://wa.me/${cleanPhoneForWhatsApp(contact.phone)}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-green-50 cursor-pointer" title="Abrir WhatsApp">
+                  <a href={`https://wa.me/${cleanPhoneForWhatsApp(contact.phone)}`} target="_blank" rel="noopener noreferrer" className="p-1 rounded hover:bg-green-50 cursor-pointer">
                     <MessageCircle className="h-3.5 w-3.5 text-green-600" />
                   </a>
-                  <a href={`tel:${contact.phone}`} className="p-1 rounded hover:bg-blue-50 cursor-pointer" title="Llamar">
+                  <a href={`tel:${contact.phone}`} className="p-1 rounded hover:bg-blue-50 cursor-pointer">
                     <Phone className="h-3.5 w-3.5 text-blue-600" />
                   </a>
                   <button onClick={() => handleCopy(contact.phone!, "phone")} className="p-1 rounded hover:bg-muted cursor-pointer">
@@ -280,7 +254,7 @@ export function ContactDetailClient({ contact, deals, activities }: ContactDetai
             ) : (
               <div className="space-y-3">
                 {deals.map((deal) => (
-                  <div key={deal.id} className="p-3 rounded-lg border cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/deals/${deal.id}`)}>
+                  <div key={deal.id} className="p-3 rounded-lg border">
                     <p className="text-sm font-medium">{deal.title}</p>
                     <div className="flex items-center justify-between mt-1">
                       <span className="text-sm font-semibold text-primary">{formatCurrency(deal.value)}</span>
@@ -290,6 +264,58 @@ export function ContactDetailClient({ contact, deals, activities }: ContactDetai
                     </div>
                   </div>
                 ))}
+
+                {/* Selector de etapa del pipeline */}
+                {deals[0] && (
+                  <div className="pt-2 border-t">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Mover en pipeline</p>
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowStageDropdown(!showStageDropdown)}
+                        disabled={movingDeal}
+                        className="w-full flex items-center justify-between px-3 py-2 rounded-md border text-sm hover:bg-muted cursor-pointer disabled:opacity-50"
+                        style={{ borderColor: stageColorActual || undefined, color: stageColorActual || undefined }}
+                      >
+                        <span>{stageActual || "Seleccionar etapa"}</span>
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                      {showStageDropdown && (
+                        <div className="absolute z-50 w-full mt-1 rounded-md border bg-background shadow-lg">
+                          {pipelineStages.map((stage) => (
+                            <button
+                              key={stage.id}
+                              onClick={() => handleMoverDeal(stage.id, stage.name)}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted cursor-pointer text-left"
+                            >
+                              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: stage.color }} />
+                              {stage.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Etiquetas especiales */}
+                    <div className="flex items-center gap-1 mt-2">
+                      <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+                      {etiquetaStages.map((stage) => (
+                        <button
+                          key={stage.id}
+                          onClick={() => handleMoverDeal(stage.id, stage.name)}
+                          disabled={movingDeal}
+                          style={{
+                            backgroundColor: etiquetaActual === stage.name ? ETIQUETA_COLORES[stage.name] : "transparent",
+                            borderColor: ETIQUETA_COLORES[stage.name],
+                            color: etiquetaActual === stage.name ? "white" : ETIQUETA_COLORES[stage.name],
+                          }}
+                          className="px-2 py-0.5 rounded-full text-xs font-medium border cursor-pointer hover:opacity-80 transition-opacity disabled:opacity-50"
+                        >
+                          {stage.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -327,7 +353,6 @@ export function ContactDetailClient({ contact, deals, activities }: ContactDetai
                   {activities.map((activity) => {
                     const Icon = activityIcons[activity.type] || FileText;
                     const config = ACTIVITY_TYPE_CONFIG[activity.type as ActivityType];
-                    const isPending = !activity.completedAt;
                     return (
                       <div key={activity.id} className="flex gap-3">
                         <div className={`rounded-full p-2 h-fit shrink-0 ${activity.completedAt ? "bg-green-100" : "bg-muted"}`}>
@@ -391,7 +416,6 @@ export function ContactDetailClient({ contact, deals, activities }: ContactDetai
           direccion: contact.direccion || "",
         }}
       />
-
       <ActivityForm open={showActivityForm} onClose={() => { setShowActivityForm(false); router.refresh(); }}
         preselectedContactId={contact.id} />
     </div>
